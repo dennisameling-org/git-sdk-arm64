@@ -3,7 +3,7 @@ name: ci-artifacts
 on:
   push:
     branches:
-      - main
+      - add-ci-artifacts
   pull_request:
 
 # For the continuous `ci-artifacts` release
@@ -15,10 +15,28 @@ env:
 
 jobs:
   minimal-sdk-artifact:
-    if: github.event.repository.fork == false
-    runs-on: [Windows, ARM64]
+    # if: github.event.repository.fork == false
+    runs-on: dennis-windows-arm64
     steps:
+      - name: TO-DROP Install build dependencies
+        shell: powershell
+        run: |
+          # Download the script to a local path
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/dennisameling-org/git-for-windows-automation/github-hosted-runners/azure-self-hosted-runners/post-deployment-script.ps1" -OutFile "$env:TEMP\post-deployment-script.ps1"
+
+          # Set PowerShell execution policy to unrestricted for the current session
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted
+
+          # Run the script
+          & "$env:TEMP\post-deployment-script.ps1"
+
+          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
+          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\cmd"
+          Add-Content $env:GITHUB_PATH "C:\Program Files\PowerShell\7"
       - name: clone git-sdk-arm64
+        shell: bash
+        env:
+          PATH: C:\Program Files\Git\cmd;C:\Program Files\PowerShell\7;${{ env.PATH }}
         run: |
           git init --bare git-sdk-arm64.git &&
           git --git-dir=git-sdk-arm64.git remote add origin https://github.com/${{github.repository}} &&
@@ -37,7 +55,8 @@ jobs:
         shell: bash
         run: mkdir artifacts && (cd minimal-sdk && tar cvf - * .[0-9A-Za-z]*) | gzip -1 >artifacts/git-sdk-aarch64-minimal.tar.gz
       - name: create zip and 7z SFX variants of the minimal SDK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/add-ci-artifacts'
         shell: bash
         run: |
           for path in clangarm64/bin/7z.exe clangarm64/bin/7z.dll clangarm64/lib/7zip/7zCon.sfx clangarm64/bin/libc++.dll
@@ -84,7 +103,8 @@ jobs:
           test "grep is /usr/bin/grep" = "$(type grep)" || exit 1
           grep README unzip-test.out
       - name: publish release assets
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/add-ci-artifacts'
         uses: actions/github-script@v7
         with:
           script: |
